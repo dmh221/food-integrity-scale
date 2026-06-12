@@ -303,7 +303,7 @@ SUB_SCORE_ROWS = [
     ("MLS", C_MLS, "How extreme the nutrition label is \u2014 flagging high sugar, sodium, saturated fat, and energy-dense sweet formulations.", "0\u201320"),
     ("MDS", C_MDS, "How many core ingredients have been replaced by industrial substitutes (modified starches, hydrogenated fats, HFCS, protein isolates).", "0\u201330"),
     ("AFS", C_AFS, "How many chemical additives are stacked in \u2014 emulsifiers, preservatives, artificial colors, flavor enhancers.", "0\u201380"),
-    ("HES", C_HES, "How engineered the sweetener system is \u2014 sugar alcohols, non-nutritive sweeteners, and multi-sweetener blending strategies.", "0\u201320"),
+    ("HES", C_HES, "Extent to which industrial formulation techniques are used. Detects ingredient-combination patterns that indicate engineering, including in products whose nutrition labels appear clean.", "0\u201320"),
 ]
 
 PROCESSING_TIERS = [
@@ -459,8 +459,8 @@ def generate_subscore_grid():
 
     panels = [
         (axes[0, 0], "mds", "afs", "Matrix Disruption (MDS, 0\u201330)", "Additive/Formulation (AFS, 0\u201380)", (0, 32), (0, 82)),
-        (axes[0, 1], "mds", "hes", "Matrix Disruption (MDS, 0\u201330)", "Hyperpalatability (HES, 0\u201320)", (0, 32), (0, 21)),
-        (axes[1, 0], "afs", "hes", "Additive/Formulation (AFS, 0\u201380)", "Hyperpalatability (HES, 0\u201320)", (0, 82), (0, 21)),
+        (axes[0, 1], "mds", "hes", "Matrix Disruption (MDS, 0\u201330)", "Formulation Engineering (HES, 0\u201320)", (0, 32), (0, 21)),
+        (axes[1, 0], "afs", "hes", "Additive/Formulation (AFS, 0\u201380)", "Formulation Engineering (HES, 0\u201320)", (0, 82), (0, 21)),
         (axes[1, 1], "afs", "mls", "Additive/Formulation (AFS, 0\u201380)", "Metabolic Load (MLS, 0\u201320)", (0, 82), (0, 21)),
     ]
 

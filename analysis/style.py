@@ -306,7 +306,7 @@ def build_page(*, page_title, heading, subtitle, stacked_html, table_html,
         f'    </tr>\n'
         f'    <tr>\n'
         f'      <td class="axis-name" style="color:{C_HES}">HES</td>\n'
-        f'      <td>How engineered the sweetener system is &mdash; sugar alcohols, non-nutritive sweeteners, and multi-sweetener blending strategies.</td>\n'
+        f'      <td>Extent to which industrial formulation techniques are used. Detects ingredient-combination patterns that indicate engineering, including in products whose nutrition labels appear clean.</td>\n'
         f'      <td class="range">0&ndash;20</td>\n'
         f'    </tr>\n'
         f'    <tr style="border-top: 1px solid {SUBTEXT}">\n'

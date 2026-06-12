@@ -32,12 +32,12 @@ The scientific literature identifies at least four distinct exposures bundled un
 
 ## 3. FIS Architecture
 
-The Food Integrity Scale (FIS) addresses these failures with a multi-axis, continuous, deterministic scoring system. It takes as input a product's name, ingredient list, nutrition panel, and serving size, and produces a composite score from 0 to 110 composed of four independent sub-scores. Products are classified into one of 10 processing tiers and one of 6 metabolic tiers.
+The Food Integrity Scale (FIS) addresses these failures with a multi-axis, continuous, deterministic scoring system. It takes as input a product's name, ingredient list, nutrition panel, and serving size, and produces a composite score from 0 to 150 composed of four independent sub-scores. Products are classified into one of 10 processing tiers and one of 6 metabolic tiers.
 
 The four axes are:
 
 - **Matrix Disruption Score (MDS, 0-30)**: Measures how far ingredients have been removed from their whole-food origin — fractionated substrates, industrial intermediates, hydrogenated fats.
-- **Additive/Formulation Score (AFS, 0-40)**: Measures additive load by both severity (weighted by evidence tier) and density (count of unique additives).
+- **Additive/Formulation Score (AFS, 0-80)**: Measures additive load by both severity (weighted by evidence tier) and density (count of unique additives).
 - **Hyperpalatability Engineering Score (HES, 0-20)**: Detects patterns of ingredient combination that signal engineered hyperpalatability — sweetener stacking, fat-sweetener-flavor "triple threat" formulations.
 - **Metabolic Load Score (MLS, 0-20)**: Measures physiological burden from nutrition panel data — added sugars, sodium, saturated fat, with offsets for fiber and protein.
 
@@ -76,9 +76,9 @@ The ontology contains approximately 100 regex patterns organized into functional
 
 **Additive tiers (for AFS):**
 
-- **Tier A — Strong UPF markers (26 patterns)**: Artificial dyes (red 40, yellow 5, blue 1, etc.), artificial and natural flavors, strong emulsifiers (polysorbate, DATEM, mono- and diglycerides, sorbitan esters, sodium stearoyl lactylate, CMC), and non-nutritive sweeteners (aspartame, sucralose, acesulfame K, saccharin, neotame, advantame).
-- **Tier B — Moderate markers (32 patterns)**: Hydrocolloid gums (xanthan, guar, gellan, carrageenan, cellulose gum, locust bean, tara), lecithin, caramel color, preservatives (sorbic acid, potassium sorbate, sodium benzoate, calcium/sodium propionate, sodium nitrite/nitrate, sodium erythorbate, TBHQ, BHT, BHA), flavor enhancers (yeast extract, MSG, autolyzed yeast, disodium inosinate/guanylate), and sugar alcohols (erythritol, sorbitol, xylitol, maltitol, mannitol, isomalt).
-- **Tier C — Tracked, conditionally scored (7 patterns)**: Citric acid, ascorbic acid, tocopherols, rosemary extract, pectin, annatto, lactic acid. These are scored only when an industrial context exists — at least 1 Tier A/B match, or 3+ total unique additive matches. This prevents citric acid in a simple salad dressing from contributing to AFS.
+- **Tier A — Strong UPF markers (40 patterns)**: Artificial dyes (red 40, yellow 5, blue 1, etc.), artificial and natural flavors, strong emulsifiers (polysorbate, DATEM, mono- and diglycerides, sorbitan esters, sodium stearoyl lactylate, CMC), and non-nutritive sweeteners (aspartame, sucralose, acesulfame K, saccharin, neotame, advantame).
+- **Tier B — Moderate markers (52 patterns)**: Hydrocolloid gums (xanthan, guar, gellan, carrageenan, cellulose gum, locust bean, tara), lecithin, caramel color, preservatives (sorbic acid, potassium sorbate, sodium benzoate, calcium/sodium propionate, sodium nitrite/nitrate, sodium erythorbate, TBHQ, BHT, BHA), flavor enhancers (yeast extract, MSG, autolyzed yeast, disodium inosinate/guanylate), and sugar alcohols (erythritol, sorbitol, xylitol, maltitol, mannitol, isomalt).
+- **Tier C — Tracked, conditionally scored (27 patterns)**: Citric acid, ascorbic acid, tocopherols, rosemary extract, pectin, annatto, lactic acid. These are scored only when an industrial context exists — at least 1 Tier A/B match, or 3+ total unique additive matches. This prevents citric acid in a simple salad dressing from contributing to AFS.
 - **Culinary — Tracked, zero AFS weight (6 patterns)**: Baking soda, baking powder, calcium chloride, cream of tartar, vanilla extract.
 
 **Matrix disruption buckets (for MDS):**
@@ -108,7 +108,7 @@ Hydrogenated fat bonus: +5 points if any hydrogenated, partially hydrogenated, o
 
 Total: Bucket 2 + Bucket 3 + hydrogenated bonus, rounded and capped at 30.
 
-#### Additive/Formulation Score (AFS, 0-40)
+#### Additive/Formulation Score (AFS, 0-80)
 
 AFS measures additive load through two components summed together.
 
@@ -117,11 +117,11 @@ AFS measures additive load through two components summed together.
 - Tier B: +3 per match (yeast extract overrides to +2).
 - Graduated bonus for top-level (depth 0) Tier A count: 3-4 matches = +4, 5-7 = +8, 8+ = +12.
 - Tier C: +1 per match, scored only conditionally — requires at least 1 Tier A/B match, or 3+ total unique A+B+C matches.
-- Severity capped at 40.
+- Severity capped at 80.
 
 **Density**: Depth-discounted count of all unique additive labels (A+B+C). Each label contributes 1.0 multiplied by depth factor. Capped at 10.
 
-Total: severity + density, rounded and capped at 40.
+Total: severity + density, rounded and capped at 80.
 
 #### Hyperpalatability Engineering Score (HES, 0-20)
 
@@ -161,9 +161,9 @@ Clamped to 0-20.
 
 ### 4.5 Classification
 
-**Processing score** = MDS + AFS + HES (0-90 theoretical maximum).
+**Processing score** = MDS + AFS + HES (0-130 theoretical maximum).
 
-**Composite score** = processing score + MLS (0-110 theoretical maximum).
+**Composite score** = processing score + MLS (0-150 theoretical maximum).
 
 #### Processing Tiers (10 tiers)
 

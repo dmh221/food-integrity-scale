@@ -469,7 +469,7 @@ COATING_FATS: list[Pattern] = [
     _p(r"\binteresterified\b", "interesterified fat", None, 3, "fat"),
     _p(r"\bshortening\b", "shortening", None, 2, "fat"),
     # Removed: cocoa butter and coconut oil — culinary fats, not industrial coatings.
-    # Their presence alongside sugar (chocolate bars, granola) is not hyperpalatability
+    # Their presence alongside sugar (chocolate bars, granola) is not formulation
     # engineering in the same way as palm kernel oil or shortening coatings.
 ]
 
