@@ -335,9 +335,18 @@ BUCKET_2: list[Pattern] = [
     _p(r"\bjuice\s+(?:from\s+)?concentrate\b", "juice concentrate", None, 2, "concentrate"),
     _p(r"\bprotein\s+concentrate\b", "protein concentrate", None, 2, "concentrate"),
 
+    # --- Mechanically separated proteins (Bucket 2) ---
+    # These use pressing, milling, or water washing — no chemical extraction.
+    _p(r"\bhemp\s+protein\b", "hemp protein", None, 2, "protein_mechanical"),
+    _p(r"\balmond\s+protein\b", "almond protein", None, 2, "protein_mechanical"),
+    # Wheat gluten: water-washed from dough, no chemical extraction.
+    # (?!\s+isolate) prevents matching "wheat protein isolate" (Bucket 3).
+    _p(r"\bwheat\s+protein\b(?!\s+isolate)", "wheat protein", None, 2, "protein_mechanical"),
+    _p(r"\b(?:vital\s+)?wheat\s+gluten\b", "wheat gluten", None, 2, "protein_mechanical"),
+
     # --- Dairy powders ---
     _p(r"\bwhey\s+powder\b", "whey powder", None, 2, "dairy_powder"),
-    _p(r"\bwhey\b(?!\s+protein\s+isolate)", "whey", None, 2, "dairy_powder"),
+    _p(r"\bwhey\b(?!\s+protein)", "whey", None, 2, "dairy_powder"),
     _p(r"\bmilk\s+powder\b", "milk powder", None, 2, "dairy_powder"),
     _p(r"\bskim\s+milk\s+powder\b", "skim milk powder", None, 2, "dairy_powder"),
     _p(r"\bnonfat\s+(?:dry\s+)?milk\b", "nonfat milk solids", None, 2, "dairy_powder"),
@@ -373,6 +382,26 @@ BUCKET_3: list[Pattern] = [
     _p(r"\b\w*\s*protein\s+isolate\b", "protein isolate", None, 3, "substrate"),
     _p(r"\bhydrolyzed\s+\w+(?:\s+\w+)?\s*protein\b", "hydrolyzed protein", None, 3, "substrate"),
     _p(r"\bhydrolysed\s+\w+(?:\s+\w+)?\s*protein\b", "hydrolyzed protein", None, 3, "substrate"),
+    # --- Bare protein extracts (wet-extracted, isolate-level processing) ---
+    # Dairy-derived: membrane filtration / acid-enzyme separation + spray drying.
+    _p(r"\bwhey\s+protein\b(?!\s+(?:isolate|concentrate))", "whey protein", None, 3, "substrate"),
+    _p(r"\bmilk\s+proteins?\b(?!\s+(?:isolate|concentrate))", "milk protein", None, 3, "substrate"),
+    _p(r"\b(?:calcium|sodium)\s+caseinate\b", "caseinate", None, 3, "substrate"),
+    _p(r"\bmicellar\s+casein\b", "micellar casein", None, 3, "substrate"),
+    # Collagen peptides: thermal + enzymatic hydrolysis of connective tissue.
+    _p(r"\bcollagen\s+peptides?\b", "collagen peptides", None, 3, "substrate"),
+    # Plant-derived: alkaline extraction + acid precipitation + spray drying.
+    # (?!\s+(?:isolate|concentrate)) prevents double-matching explicit forms.
+    _p(r"\bpea\s+protein\b(?!\s+(?:isolate|concentrate))", "pea protein", None, 3, "substrate"),
+    _p(r"\bsoy\s+protein\b(?!\s+(?:isolate|concentrate))", "soy protein", None, 3, "substrate"),
+    _p(r"\brice\s+protein\b(?!\s+(?:isolate|concentrate))", "rice protein", None, 3, "substrate"),
+    _p(r"\bfava\s+(?:bean\s+)?protein\b", "fava bean protein", None, 3, "substrate"),
+    _p(r"\bfaba\s+(?:bean\s+)?protein\b", "faba bean protein", None, 3, "substrate"),
+    _p(r"\bchickpea\s+protein\b", "chickpea protein", None, 3, "substrate"),
+    _p(r"\bmung\s+bean\s+protein\b", "mung bean protein", None, 3, "substrate"),
+    _p(r"\bpotato\s+protein\b", "potato protein", None, 3, "substrate"),
+    _p(r"\boat\s+protein\b", "oat protein", None, 3, "substrate"),
+    _p(r"\bsunflower\s+protein\b", "sunflower protein", None, 3, "substrate"),
     # --- Hydrogenated / interesterified fats ---
     # (?<!partially ) prevents the generic "hydrogenated fat" label from also
     # matching inside "partially hydrogenated", which has its own more-specific
@@ -469,7 +498,7 @@ COATING_FATS: list[Pattern] = [
     _p(r"\binteresterified\b", "interesterified fat", None, 3, "fat"),
     _p(r"\bshortening\b", "shortening", None, 2, "fat"),
     # Removed: cocoa butter and coconut oil — culinary fats, not industrial coatings.
-    # Their presence alongside sugar (chocolate bars, granola) is not formulation
+    # Their presence alongside sugar (chocolate bars, granola) is not hyperpalatability
     # engineering in the same way as palm kernel oil or shortening coatings.
 ]
 

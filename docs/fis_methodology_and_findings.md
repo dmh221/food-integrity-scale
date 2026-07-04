@@ -49,7 +49,7 @@ FIS is fully deterministic: the same ingredient list and nutrition panel always 
 
 ### 4.1 Taxonomy Classification
 
-Before scoring, each product is classified into a food identity ontology of 11 families and 64 subfamilies using Claude Haiku, an LLM. The taxonomy describes what a food is — its biological and culinary identity — not how it is stored or sold. A frozen pizza is `composite.pizza`; dried mango is `pantry.dried_fruits_nuts`; ice cream is `desserts.frozen`.
+Before scoring, each product is classified into a food identity ontology of 11 families and 64 subfamilies using an LLM (Gemini 2.5 Flash by default; Claude Haiku via `TAXONOMY_LLM_PROVIDER=anthropic`). The taxonomy describes what a food is — its biological and culinary identity — not how it is stored or sold. A frozen pizza is `composite.pizza`; dried mango is `pantry.dried_fruits_nuts`; ice cream is `desserts.frozen`.
 
 The 11 families are: produce, meat, seafood, plant_protein, dairy_eggs, baked_goods, desserts, drinks, pantry, composite, and non_food.
 

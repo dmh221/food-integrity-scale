@@ -56,7 +56,7 @@ Ingredient normalization
     |
     v
 Taxonomy classification (11 families, 64 subfamilies)
-    LLM classifier (Claude Haiku) + deterministic fallback
+    LLM classifier (Gemini 2.5 Flash, Claude Haiku via TAXONOMY_LLM_PROVIDER=anthropic) + deterministic fallback
     SHA-256 cached to disk, version-gated
     |
     v
@@ -105,7 +105,7 @@ python -m pytest tests/ -v
 python run_scoring.py
 ```
 
-Taxonomy classification requires an Anthropic API key (`ANTHROPIC_API_KEY` env var) for Claude Haiku. Use `--no-llm` to skip LLM classification.
+Taxonomy classification requires a Gemini API key (`GEMINI_API_KEY` env var) by default, or an Anthropic API key (`ANTHROPIC_API_KEY`) with `TAXONOMY_LLM_PROVIDER=anthropic` to use Claude Haiku instead. Use `--no-llm` to skip LLM classification.
 
 ## Project Structure
 

@@ -21,7 +21,6 @@ import time
 from pathlib import Path
 from typing import Any
 
-import anthropic
 
 
 # ---------------------------------------------------------------------------
@@ -3379,6 +3378,12 @@ def _call_llm_batch(subfamily: str, products: list[dict]) -> list[str]:
 
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
+        return fallback
+
+    try:
+        import anthropic
+    except ImportError:
+        print("[micro_label] anthropic package not installed -- returning fallback")
         return fallback
 
     client = anthropic.Anthropic(api_key=api_key)
