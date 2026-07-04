@@ -7,15 +7,19 @@ mango is "pantry.dried_fruits_nuts", and ice cream is "desserts.frozen"
 regardless of the retail aisle it sits in.
 
 The ontology has 11 families and 68 subfamilies.  Every product receives:
-    taxonomy_family      one of the 10 families
-    taxonomy_subfamily   one of the 60 subfamilies
+    taxonomy_family      one of the 11 families (or "unknown" on failure)
+    taxonomy_subfamily   one of the 68 subfamilies (or "unclassified")
     taxonomy_label       "{family}.{subfamily}" combined string
     taxonomy_confidence  0.0-1.0 (capped at 0.90 for LLM results)
-    taxonomy_source      "llm" or "fallback"
+    taxonomy_source      "llm", "llm_invented", or "fallback"
 
-Classification is done via Claude Haiku in batches of 20 products.  Results
-are cached to disk as JSON keyed by a SHA-256 hash that incorporates a
-taxonomy version string, so any label-set changes auto-invalidate the cache.
+Classification is done via an LLM (Gemini 2.5 Flash by default; Claude Haiku
+via TAXONOMY_LLM_PROVIDER=anthropic) in batches of _BATCH_SIZE products.
+Each response item echoes the product's index so results are matched by id,
+never by array position.  Results are cached to disk as JSON keyed by a
+SHA-256 hash that incorporates a taxonomy version string, so any label-set
+changes auto-invalidate the cache.  Fallback results are never cached, so
+failed products are retried on the next run.
 """
 
 from __future__ import annotations
@@ -146,9 +150,19 @@ _CACHE_DIR = Path(__file__).parent.parent / "output" / "taxonomy_cache"
 # Audit log: every invented label is appended here for taxonomy review.
 _INVENTED_LOG = Path(__file__).parent.parent / "output" / "taxonomy_cache" / "invented_labels.jsonl"
 
-# LLM settings
-_MODEL = "claude-haiku-4-5-20251001"
-_BATCH_SIZE = 50
+# LLM settings.
+# Provider: "gemini" (default — cheaper, same key as the rest of the Budi
+# stack) or "anthropic". Both share the same prompt, alignment, and cache;
+# cache keys don't encode the provider, so switching never invalidates
+# existing classifications.
+_PROVIDER = os.environ.get("TAXONOMY_LLM_PROVIDER", "gemini").lower()
+_ANTHROPIC_MODEL = "claude-haiku-4-5-20251001"
+_GEMINI_MODEL = "gemini-2.5-flash"
+# 25 products/batch with notes only on invented labels keeps responses far
+# below _MAX_TOKENS. The previous 50-product batches with mandatory notes
+# routinely truncated at max_tokens=4096, failing whole batches.
+_BATCH_SIZE = 25
+_MAX_TOKENS = 8192
 _RATE_LIMIT_DELAY = 0.1  # seconds between batches
 _MAX_CONFIDENCE = 0.90   # cap LLM-reported confidence
 
@@ -181,10 +195,16 @@ class TaxonomyResult:
 
 
 def _default_result() -> TaxonomyResult:
-    """Return a safe fallback when classification fails or is disabled."""
+    """Return a sentinel when classification fails or is disabled.
+
+    Deliberately NOT a real food category: a failure must stay detectable
+    downstream. The previous default (pantry.noodles) silently mislabeled
+    every unclassified product as noodles AND imposed noodles' "C"
+    processing floor on them.
+    """
     return TaxonomyResult(
-        family="pantry",
-        subfamily="noodles",
+        family="unknown",
+        subfamily="unclassified",
         confidence=0.0,
         source="fallback",
     )
@@ -277,7 +297,12 @@ You are a grocery product taxonomy classifier.  Your job is to assign each
 product to the best matching taxonomy label.
 
 Respond ONLY with a JSON array.  Each element must be an object with these
-keys: "family", "subfamily", "confidence", "notes".
+keys: "index", "family", "subfamily", "confidence".
+"index" MUST echo the Product number being classified (Product 3 ->
+"index": 3).  Results are matched by index, so never omit, duplicate,
+skip, or renumber it — return exactly one object per product.
+Include a "notes" key ONLY when you invent a non-preferred label; omit it
+otherwise to keep the response compact.
 
 Preferred labels (family.subfamily) — use these when they fit:
 {chr(10).join("  - " + lbl for lbl in CANONICAL_LABELS)}
@@ -559,35 +584,29 @@ class _FatalAPIError(Exception):
     pass
 
 
-def _classify_batch_llm(rows: list[dict]) -> list[TaxonomyResult | None]:
-    """Send a batch of products to Claude Haiku and return parsed results.
-
-    Returns a list parallel to *rows*.  Entries are None when classification
-    fails for that product (invalid label, parse error, etc.).
+def _call_anthropic(user_prompt: str) -> str | None:
+    """One Claude Haiku call. Returns response text, or None on transient error.
 
     Raises _FatalAPIError for billing/auth errors that won't resolve by
     retrying (e.g. insufficient credits, invalid API key).
     """
-    # Lazy import -- keeps the module usable without anthropic installed,
-    # e.g. when running with use_llm=False.
+    # Lazy import -- keeps the module usable without anthropic installed.
     try:
         import anthropic
     except ImportError:
         print("[taxonomy] anthropic package not installed -- returning None for batch")
-        return [None] * len(rows)
+        return None
 
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         print("[taxonomy] ANTHROPIC_API_KEY not set -- returning None for batch")
-        return [None] * len(rows)
+        return None
 
     client = anthropic.Anthropic(api_key=api_key)
-    user_prompt = _build_user_prompt(rows)
-
     try:
         response = client.messages.create(
-            model=_MODEL,
-            max_tokens=4096,
+            model=_ANTHROPIC_MODEL,
+            max_tokens=_MAX_TOKENS,
             system=_SYSTEM_PROMPT,
             messages=[{"role": "user", "content": user_prompt}],
         )
@@ -597,13 +616,84 @@ def _classify_batch_llm(rows: list[dict]) -> list[TaxonomyResult | None]:
         if "credit balance" in exc_str or "authentication" in exc_str.lower() or "invalid.*api.key" in exc_str.lower():
             raise _FatalAPIError(exc_str) from exc
         print(f"[taxonomy] API error: {exc}")
-        return [None] * len(rows)
+        return None
 
-    # Extract text content from the response.
     response_text = ""
     for block in response.content:
         if hasattr(block, "text"):
             response_text += block.text
+    return response_text
+
+
+def _call_gemini(user_prompt: str, _retried: bool = False) -> str | None:
+    """One Gemini call in native JSON mode. Returns text, or None on failure.
+
+    Thinking is disabled: this is an extraction task (temperature 0.1, fixed
+    label set) and 2.5-model thinking tokens would count against
+    max_output_tokens, reintroducing the truncation failure mode.
+
+    Rate-limit errors (429) get one in-place retry after a pause; auth
+    errors raise _FatalAPIError so the run stops instead of burning through
+    every batch.
+    """
+    # Lazy import -- keeps the module usable without google-genai installed.
+    try:
+        from google import genai
+        from google.genai import types as genai_types
+    except ImportError:
+        print("[taxonomy] google-genai package not installed -- returning None for batch")
+        return None
+
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        print("[taxonomy] GEMINI_API_KEY not set -- returning None for batch")
+        return None
+
+    client = genai.Client(api_key=api_key)
+    try:
+        response = client.models.generate_content(
+            model=_GEMINI_MODEL,
+            contents=user_prompt,
+            config=genai_types.GenerateContentConfig(
+                system_instruction=_SYSTEM_PROMPT,
+                temperature=0.1,
+                max_output_tokens=_MAX_TOKENS,
+                response_mime_type="application/json",
+                thinking_config=genai_types.ThinkingConfig(thinking_budget=0),
+            ),
+        )
+    except Exception as exc:
+        exc_str = str(exc)
+        if "API key not valid" in exc_str or "API_KEY_INVALID" in exc_str or "PERMISSION_DENIED" in exc_str:
+            raise _FatalAPIError(exc_str) from exc
+        if ("429" in exc_str or "RESOURCE_EXHAUSTED" in exc_str) and not _retried:
+            print("[taxonomy] Gemini rate limited -- pausing 15s and retrying batch")
+            time.sleep(15)
+            return _call_gemini(user_prompt, _retried=True)
+        print(f"[taxonomy] API error: {exc}")
+        return None
+
+    return response.text or ""
+
+
+def _classify_batch_llm(rows: list[dict]) -> list[TaxonomyResult | None]:
+    """Send a batch of products to the configured LLM and return parsed results.
+
+    Returns a list parallel to *rows*.  Entries are None when classification
+    fails for that product (invalid label, parse error, etc.).
+
+    Raises _FatalAPIError for billing/auth errors that won't resolve by
+    retrying.
+    """
+    user_prompt = _build_user_prompt(rows)
+
+    if _PROVIDER == "anthropic":
+        response_text = _call_anthropic(user_prompt)
+    else:
+        response_text = _call_gemini(user_prompt)
+
+    if response_text is None:
+        return [None] * len(rows)
 
     # Parse JSON array from response.
     try:
@@ -621,23 +711,52 @@ def _classify_batch_llm(rows: list[dict]) -> list[TaxonomyResult | None]:
     if len(parsed_list) != len(rows):
         print(f"[taxonomy]   LLM returned {len(parsed_list)} results for {len(rows)} products")
 
-    # Align parsed results with input rows.  If the LLM returned fewer
-    # items than we sent, pad with None.
+    # Align parsed results with input rows BY ECHOED INDEX, never by array
+    # position.  Positional zipping silently shifts every label onto the
+    # wrong product if the LLM drops or merges one item mid-array.
+    indexed: dict[int, dict] = {}
+    all_indexed = True
+    for item in parsed_list:
+        idx = item.get("index") if isinstance(item, dict) else None
+        if isinstance(idx, float) and idx.is_integer():
+            idx = int(idx)
+        if isinstance(idx, int) and not isinstance(idx, bool) \
+                and 1 <= idx <= len(rows) and idx not in indexed:
+            indexed[idx] = item
+        else:
+            all_indexed = False
+
+    if all_indexed and indexed:
+        aligned: list[dict | None] = [indexed.get(i + 1) for i in range(len(rows))]
+    elif len(parsed_list) == len(rows):
+        # No reliable indices but the count matches exactly — positional
+        # order is the best available alignment.
+        print("[taxonomy]   WARNING: missing/invalid index fields; falling back to positional order")
+        aligned = list(parsed_list)
+    else:
+        # Count mismatch AND unreliable indices: salvage only the items
+        # with a valid index; everything else stays None (retried later).
+        aligned = [indexed.get(i + 1) for i in range(len(rows))]
+        print(
+            f"[taxonomy]   Unalignable response ({len(parsed_list)} items, "
+            f"{len(rows)} products); salvaged {len(indexed)} by index"
+        )
+
     results: list[TaxonomyResult | None] = []
     for i in range(len(rows)):
-        if i < len(parsed_list):
-            parsed = _parse_one(
-                parsed_list[i],
-                product_name=rows[i].get("name", ""),
-                store=rows[i].get("store", ""),
-            )
-            if parsed is None:
-                raw = parsed_list[i]
-                label = f"{raw.get('family', '?')}.{raw.get('subfamily', '?')}"
-                print(f"[taxonomy]   REJECTED: {label} for '{rows[i].get('name', '?')[:50]}'")
-            results.append(parsed)
-        else:
+        item = aligned[i]
+        if item is None:
             results.append(None)
+            continue
+        parsed = _parse_one(
+            item,
+            product_name=rows[i].get("name", ""),
+            store=rows[i].get("store", ""),
+        )
+        if parsed is None:
+            label = f"{item.get('family', '?')}.{item.get('subfamily', '?')}"
+            print(f"[taxonomy]   REJECTED: {label} for '{rows[i].get('name', '?')[:50]}'")
+        results.append(parsed)
 
     return results
 
@@ -739,8 +858,8 @@ def classify_taxonomy(
         df: Product DataFrame.  Expected columns include at minimum
             ``store`` and ``name``.  ``category``, ``subcategory``, and
             ``ingredients`` are used when available.
-        use_llm: When False, every product receives the fallback result
-            (pantry.pasta_noodles, confidence=0.0, source="fallback").
+        use_llm: When False, every product receives the fallback sentinel
+            (unknown.unclassified, confidence=0.0, source="fallback").
             Useful for testing without API access.
 
     Returns:

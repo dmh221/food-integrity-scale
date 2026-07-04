@@ -101,8 +101,8 @@ def check_anchors(df):
 def check_taxonomy_fallbacks(df, use_llm: bool) -> None:
     """Warn loudly if any products received the fallback taxonomy label.
 
-    The fallback (pantry.pasta_noodles) has a hardcoded 'C' processing floor.
-    Products that should be W/Wp (produce, meat, plain water) get mis-scored:
+    The fallback sentinel (unknown.unclassified) has no processing floor and
+    no product-type mapping, so affected products are still imprecisely scored:
       - Single-ingredient whole foods → C0 instead of W
       - No-ingredient whole foods → processing_class='unknown', composite=NaN
         (excluded from all analysis)
@@ -120,7 +120,7 @@ def check_taxonomy_fallbacks(df, use_llm: bool) -> None:
     n = len(fallbacks)
     print(f"\n{'!' * 65}")
     print(f"  TAXONOMY FALLBACK WARNING: {n:,} product(s) received the fallback")
-    print(f"  taxonomy label (pantry.pasta_noodles) due to LLM classification")
+    print(f"  taxonomy label (unknown.unclassified) due to LLM classification")
     print(f"  failure. These products are silently mis-scored:")
     print(f"    - Whole foods (produce/meat/plain water): C0 or 'unknown'")
     print(f"      instead of W — may be EXCLUDED from analysis if no ingredients")
